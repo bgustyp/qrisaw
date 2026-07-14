@@ -1,0 +1,7 @@
+.env
+/node_modules
+session.json
+qrisaw
+chromium/
+saweria_ts_*/
+*wsl.localhost*

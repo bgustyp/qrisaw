@@ -1,0 +1,378 @@
+openapi: 3.0.0
+info:
+  title: Qrisaw (Unofficial)
+  description: Unofficial API wrapper for Saweria QRIS payments and transaction monitoring. Not affiliated with Saweria.
+  version: 1.0.23
+servers:
+  - url: http://localhost:3000
+    description: Local server
+paths:
+  /:
+    get:
+      summary: API info & available endpoints
+      description: Returns API name, version, server time, and endpoint listing. Development mode shows all endpoints; production shows only essential ones.
+      tags:
+        - Root
+      responses:
+        "200":
+          description: API info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RootResponse"
+  /health:
+    get:
+      summary: Server + auth session health check
+      tags:
+        - Health
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /health/session:
+    post:
+      summary: Manually set the Saweria auth session (bypasses browser login)
+      description: If ADMIN_KEY env var is set, requires it via X-Admin-Key header or adminKey body field.
+      tags:
+        - Health
+      parameters:
+        - in: header
+          name: X-Admin-Key
+          required: false
+          schema:
+            type: string
+          description: Required only if ADMIN_KEY env var is configured
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetSessionRequest"
+      responses:
+        "200":
+          description: Session set successfully
+        "400":
+          description: Missing authToken or userId
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized (invalid/missing admin key)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/users:
+    get:
+      summary: Get user profile information
+      tags:
+        - Users
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+  /api/payments/balance:
+    get:
+      summary: Get current balance
+      tags:
+        - Balance
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalanceResponse"
+  /api/payments/balance/available:
+    get:
+      summary: Get available balance (ready to cashout)
+      tags:
+        - Balance
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvailableBalanceResponse"
+  /api/payments/transactions:
+    get:
+      summary: List recent transactions
+      tags:
+        - Transactions
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 15
+          description: Number of items per page
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      type: object
+  /api/payments/{id}/status:
+    get:
+      summary: Check payment status by ID
+      tags:
+        - Transactions
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Payment ID (UUID)
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentStatusResponse"
+  /api/payments/qris:
+    post:
+      summary: Create QRIS payment
+      tags:
+        - Payments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateQrisRequest"
+      responses:
+        "201":
+          description: Payment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateQrisResponse"
+        "400":
+          description: Invalid input (amount, customer)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limit exceeded (5 requests/minute)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  schemas:
+    RootResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        name:
+          type: string
+        version:
+          type: string
+        description:
+          type: string
+        serverTime:
+          type: string
+        license:
+          type: string
+        repository:
+          type: string
+          nullable: true
+        environment:
+          type: string
+          enum: [development, production]
+        endpoints:
+          type: object
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+    HealthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            status:
+              type: string
+            timestamp:
+              type: string
+            uptime:
+              type: number
+            auth:
+              type: object
+              properties:
+                authenticated:
+                  type: boolean
+                tokenValid:
+                  type: boolean
+                tokenExpiresIn:
+                  type: string
+                  nullable: true
+            memory:
+              type: object
+              properties:
+                heapUsed:
+                  type: string
+                heapTotal:
+                  type: string
+    SetSessionRequest:
+      type: object
+      required:
+        - authToken
+        - userId
+      properties:
+        authToken:
+          type: string
+        userId:
+          type: string
+        adminKey:
+          type: string
+          description: Alternative to X-Admin-Key header, required only if ADMIN_KEY env var is set
+    BalanceResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            balance:
+              type: integer
+    AvailableBalanceResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            available_balance:
+              type: integer
+            currency:
+              type: string
+    CreateQrisRequest:
+      type: object
+      required:
+        - amount
+        - customer
+      properties:
+        amount:
+          type: integer
+          example: 10000
+        message:
+          type: string
+          example: "Support server"
+        customer:
+          type: object
+          required:
+            - name
+            - email
+          properties:
+            name:
+              type: string
+            email:
+              type: string
+              format: email
+            phone:
+              type: string
+              description: Optional customer phone number
+    CreateQrisResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            payment_id:
+              type: string
+            amount:
+              type: integer
+            total_amount:
+              type: integer
+            qr_string:
+              type: string
+            status:
+              type: string
+    PaymentStatusResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            payment_id:
+              type: string
+            amount:
+              type: integer
+            status:
+              type: string
+            created_at:
+              type: string
+    UserResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            currency:
+              type: string
+            id:
+              type: string
+            email:
+              type: string
+            username:
+              type: string
+            tier_key:
+              type: string
+            iss:
+              type: string

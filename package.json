@@ -1,0 +1,33 @@
+{
+  "name": "qrisaw",
+  "version": "1.0.23",
+  "description": "Unofficial API wrapper for Saweria QRIS payments and transaction monitoring. Not affiliated with Saweria.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bgustyp/qrisaw"
+  },
+  "scripts": {
+    "start": "node app.js",
+    "start:bun": "bun app.js",
+    "dev": "node --watch app.js",
+    "setup:chromium": "npx @puppeteer/browsers install chromium@stable --path ./chromium",
+    "build": "bun build --compile app.js --outfile qrisaw"
+  },
+  "bin": {
+    "qrisaw": "app.js"
+  },
+  "dependencies": {
+    "axios": "^1.13.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.3.1",
+    "helmet": "^8.3.0",
+    "puppeteer-real-browser": "^1.4.4",
+    "swagger-ui-express": "^5.0.1",
+    "winston": "^3.19.0",
+    "write-file-atomic": "^7.0.1",
+    "yamljs": "^0.3.0"
+  }
+}
