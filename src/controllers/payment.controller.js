@@ -32,7 +32,12 @@ const availableBalance = async (_, res) => {
 
 const createQris = async (req, res) => {
   try {
-    const { amount, message, customer } = req.body;
+    const { amount, message, customer, customer_info, agree = true, notUnderage = true } = req.body ?? {};
+    if (agree !== true || notUnderage !== true) {
+      return error(res, { statusCode: 400, message: "Both age and terms confirmations are required" });
+    }
+    const payer = customer_info ?? customer;
+    const name = customer_info != null ? payer.first_name : payer?.name;
 
     // Validate amount
     const parsedAmount = Number(amount);
@@ -60,21 +65,21 @@ const createQris = async (req, res) => {
       });
     }
 
-    if (!customer || typeof customer !== "object") {
+    if (!payer || typeof payer !== "object") {
       return error(res, {
         statusCode: 400,
-        message: "Missing required field: customer object",
+        message: "Missing required field: customer_info or customer",
       });
     }
     
-    if (!customer.email || typeof customer.email !== "string" || !customer.email.includes("@")) {
+    if (typeof payer.email !== "string" || !payer.email.includes("@")) {
       return error(res, {
         statusCode: 400,
         message: "Invalid customer email",
       });
     }
     
-    if (!customer.name || typeof customer.name !== "string" || customer.name.trim().length === 0) {
+    if (typeof name !== "string" || name.trim().length === 0) {
       return error(res, {
         statusCode: 400,
         message: "Invalid customer name",
@@ -85,9 +90,9 @@ const createQris = async (req, res) => {
       amount: parsedAmount,
       message: message || "",
       customer_info: {
-        first_name: customer.name,
-        email: customer.email,
-        phone: customer.phone || "",
+        first_name: name,
+        email: payer.email,
+        phone: payer.phone || "",
       },
     });
 
