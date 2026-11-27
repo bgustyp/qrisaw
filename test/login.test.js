@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const { spawn } = require("node:child_process");
 const { once } = require("node:events");
 const http = require("node:http");
+const os = require("node:os");
 const test = require("node:test");
 
 test("manual session helper sends credentials only to the local endpoint and reports rejection", async (t) => {
@@ -21,12 +22,13 @@ test("manual session helper sends credentials only to the local endpoint and rep
   await once(server, "listening");
   t.after(() => new Promise(resolve => server.close(resolve)));
   for (const expected of [0, 1]) {
-    const child = spawn("bash", ["src/login.sh"], {
-      env: { PATH: process.env.PATH, ADMIN_KEY: key, PORT: String(server.address().port), DOTENV_CONFIG_PATH: "/dev/null" },
+    const child = spawn(process.execPath, ["src/login.js"], {
+      env: { ...process.env, ADMIN_KEY: key, PORT: String(server.address().port), DOTENV_CONFIG_PATH: os.devNull },
     });
     let output = "";
     for (const stream of [child.stdout, child.stderr]) stream.on("data", chunk => { output += chunk; });
-    child.stdin.end(`fixture-id\n${token}\n`);
+    const newline = expected === 0 ? "\r\n" : "\n";
+    child.stdin.end(`fixture-id${newline}${token}${newline}`);
     assert.equal((await once(child, "close"))[0], expected);
     assert.ok(!output.includes(token) && !output.includes(key));
   }
