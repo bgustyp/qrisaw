@@ -14,7 +14,9 @@ test("private routes fail closed; authorized balance and public status still wor
     if (previous === undefined) delete process.env.ADMIN_KEY;
     else process.env.ADMIN_KEY = previous;
   });
-  const upstream = t.mock.method(client, "get", async () => ({ data: { data: { balance: 123 } } }));
+  const upstream = t.mock.method(client, "get", async (path) => ({
+    data: { data: path === "/users" ? { username: "fixture" } : { balance: 123 } },
+  }));
   const setSession = t.mock.method(auth, "setSession", () => {});
   const app = express();
   app.use(express.json());
@@ -42,6 +44,9 @@ test("private routes fail closed; authorized balance and public status still wor
   t.mock.method(auth, "requireUserId", () => "fixture");
   const balance = await fetch(`${url}/api/payments/balance`, { headers });
   assert.equal((await balance.json()).data.balance, 123);
+  const profile = await fetch(`${url}/api/users`, { headers });
+  assert.equal(profile.status, 200);
+  assert.deepEqual((await profile.json()).data, { username: "fixture" });
   assert.equal((await fetch(`${url}/api/payments/bad-id/status`)).status, 400);
   assert.equal((await fetch(`${url}/api/payments/00000000-0000-4000-8000-000000000000/status`)).status, 200);
 });

@@ -2,8 +2,8 @@ const saweria = require("../configs/saweria.config");
 const authService = require("./auth.service");
 
 const getUserInfo = async () => {
-  const userId = authService.requireUserId();
-  const res = await saweria.get(`/users/${userId}`);
+  authService.requireUserId();
+  const res = await saweria.get("/users");
   return res.data.data ?? res.data;
 };
 
