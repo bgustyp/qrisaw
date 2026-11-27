@@ -1,6 +1,6 @@
 {
   "name": "qrisaw",
-  "version": "1.0.23",
+  "version": "1.1.0",
   "description": "Unofficial API wrapper for Saweria QRIS payments and transaction monitoring. Not affiliated with Saweria.",
   "license": "MIT",
   "repository": {
