@@ -8,10 +8,12 @@
     "url": "https://github.com/bgustyp/qrisaw"
   },
   "scripts": {
+    "test": "node --test test/*.test.js",
+    "test:docker": "sh test/docker-smoke.sh",
     "start": "node app.js",
     "start:bun": "bun app.js",
     "dev": "node --watch app.js",
-    "setup:chromium": "npx @puppeteer/browsers install chromium@stable --path ./chromium",
+    "login": "bash src/login.sh",
     "build": "bun build --compile app.js --outfile qrisaw"
   },
   "bin": {

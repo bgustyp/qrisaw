@@ -3,8 +3,8 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const logger = require("../utils/logger");
-const { findChrome } = require("../browser/chrome-locator");
-const { solveTurnstile, injectToken } = require("../browser/turnstile-solver");
+const { findChrome } = require("./chrome-locator");
+const { solveTurnstile, injectToken } = require("./turnstile-solver");
 
 const SITEKEY = "0x4AAAAAABdD0SArXy9tgW81";
 const LOGIN_URL = "https://saweria.co/login";
@@ -16,9 +16,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const rand = (min, max) => Math.random() * (max - min) + min;
 
 const makeTempDir = () => {
-  const dir = path.join(os.tmpdir(), `saweria_ts_${process.pid}_${Date.now()}`);
-  fs.mkdirSync(dir, { recursive: true });
-  return dir;
+  return fs.mkdtempSync(path.join(os.tmpdir(), "saweria_ts_"));
 };
 
 const removeDir = (dir) => {
@@ -36,6 +34,9 @@ const browserLogin = async (retries = 3) => {
 
   if (!email || !password) {
     throw new Error("Missing SAWERIA_EMAIL or SAWERIA_PASSWORD");
+  }
+  if (process.getuid?.() === 0) {
+    throw new Error("Browser login requires a non-root user and a working Chromium sandbox.");
   }
 
   let lastError;
@@ -60,7 +61,8 @@ const browserLogin = async (retries = 3) => {
         turnstile: true,
         connectOption: { defaultViewport: null },
         disableXvfb: process.platform === "win32",
-        ignoreAllFlags: false,
+        // The library's default flags include --no-sandbox.
+        ignoreAllFlags: true,
       });
       browser = br;
 
@@ -129,7 +131,7 @@ const browserLogin = async (retries = 3) => {
       }
 
       if (!cdpAuthToken || !cdpUserId) {
-        logger.warn(`CDP captured: authToken=${cdpAuthToken}, userId=${cdpUserId}`);
+        logger.warn("Incomplete login response", { hasToken: Boolean(cdpAuthToken), hasUserId: Boolean(cdpUserId) });
         throw new Error("Login response not captured — CDP Network listener missed /auth/login");
       }
 
@@ -137,6 +139,16 @@ const browserLogin = async (retries = 3) => {
       return { authToken: cdpAuthToken, userId: cdpUserId };
 
     } catch (err) {
+      if (!browser && err.code === "ECONNREFUSED") {
+        // Classify only explicit sandbox failures; never expose raw browser logs.
+        let stderr = "";
+        try { stderr = fs.readFileSync(path.join(profileDir, "chrome-err.log"), "utf8"); } catch {}
+        if (/No usable sandbox|Failed to move to new namespace:[^\n]*Operation not permitted/i.test(stderr)) {
+          throw Object.assign(new Error("Chromium sandbox unavailable. Supply a manual session or use a sandbox-capable runtime."), {
+            code: "CHROMIUM_SANDBOX_UNAVAILABLE", statusCode: 503,
+          });
+        }
+      }
       lastError = err;
       logger.warn(`Browser login attempt ${attempt} failed`, { error: err.message });
       if (attempt < retries) {

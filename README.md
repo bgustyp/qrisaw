@@ -1,4 +1,4 @@
-# Qrisaw (Unofficial)
+# Qrisaw
 
 > **Note**: This software is not affiliated with, endorsed by, or sponsored by Saweria. Usage may violate Saweria's Terms of Service. Use at your own risk.
 
@@ -41,7 +41,7 @@ SAWERIA_PASSWORD=password_anda
 # Optional
 # CHROME_PATH=/usr/bin/google-chrome-stable
 # BROWSER_HEADLESS=true  # Default false, biarkan false untuk solve rate terbaik
-# ADMIN_KEY=your-secret-admin-key
+ADMIN_KEY=  # Isi dengan hasil `openssl rand -hex 32` untuk mengaktifkan endpoint privat
 ```
 
 ### 3. Instalasi & Jalan
@@ -50,6 +50,14 @@ SAWERIA_PASSWORD=password_anda
 npm install
 npm start
 ```
+
+**Sesi manual di WSL/Linux:** Bila Chromium tidak dapat dijalankan, isi `ADMIN_KEY`
+dan kosongkan `SAWERIA_EMAIL` serta `SAWERIA_PASSWORD` sebelum menyalakan server.
+Di terminal kedua, jalankan `npm run login`. Login lewat browser Windows biasa, lalu
+masukkan `userId` dan `authToken` sesi milik Anda jika sudah tersedia.
+Skrip ini hanya memasang sesi yang sudah ada; skrip tidak mengambil token dari browser.
+Token tidak ditampilkan atau dikirim ke luar host. Endpoint privat seperti `/api/users`
+tetap memerlukan header `X-Admin-Key`, termasuk setelah sesi dipasang.
 
 ### 4. Docker (recommended untuk server)
 
@@ -61,27 +69,29 @@ Atau build manual:
 
 ```bash
 docker build -t qrisaw .
-docker run -d -p 3000:3000 --env-file .env qrisaw
+docker run -d -p 127.0.0.1:3000:3000 --env-file .env -e NODE_ENV=production -e PORT=3000 -e HOST=0.0.0.0 qrisaw
 ```
 
-Image sudah bundle Chromium + Xvfb. Tidak perlu install apa-apa di host.
+Image menyertakan Chromium dari Debian dan berjalan sebagai pengguna `node`, bukan root.
+Sesi container disimpan di `/home/node/session.json`. Jika sebelumnya memakai mount `/app/session.json`, pindahkan sesi saat migrasi dan pastikan UID 1000 bisa menulis direktori sesi.
+
+Auto-login memerlukan sandbox Chromium yang diizinkan kernel dan runtime container. Uji tanpa kredensial: `docker run --rm --network none qrisaw chromium --headless --disable-background-networking --dump-dom about:blank`.
+Jika gagal karena kebijakan namespace, gunakan sesi manual melalui `POST /health/session` dan kosongkan kredensial auto-login. Jangan gunakan `--no-sandbox` atau container privileged.
+Jika Chromium melaporkan sandbox ditolak, `/health` menampilkan `data.auth.browserLoginError: "CHROMIUM_SANDBOX_UNAVAILABLE"`. Proses menghentikan percobaan browser sampai restart. Sesi manual tetap dapat digunakan. Tanpa sesi, endpoint yang membutuhkan akun mengembalikan `503`; `401` untuk kunci admin salah tetap berlaku.
 
 ### 5. Single Binary (via Bun)
 
 Untuk distribusi sebagai single binary tanpa Node.js:
 
 ```bash
-# 1. Download Chromium lokal
-npm run setup:chromium
-
-# 2. Build single binary
+# 1. Build single binary
 npm run build
 
-# 3. Jalankan
+# 2. Jalankan
 ./qrisaw
 ```
 
-Binary akan auto-detect Chromium di `./chromium/` (dari step 1) atau Chrome system.
+Instal Chromium dari pengelola paket OS, atau arahkan `CHROME_PATH` ke instalasi browser tepercaya.
 Pastikan Xvfb terinstall di Linux tanpa GUI (`sudo apt install -y xvfb`).
 
 ---
@@ -92,12 +102,12 @@ Pastikan Xvfb terinstall di Linux tanpa GUI (`sudo apt install -y xvfb`).
 ├── app.js                       # Entry point & app config
 ├── docs/                        # OpenAPI specification
 ├── src/
-│   ├── browser/                 # Browser automation (chrome-locator, turnstile-solver)
+│   ├── browser/                 # Browser login, Chrome detection, Turnstile handling
 │   ├── configs/                 # Axios instance & interceptors
 │   ├── controllers/             # Request handlers
 │   ├── middlewares/             # Express middlewares
 │   ├── routes/                  # Express routes
-│   ├── services/                # API calls, auth, captcha orchestration
+│   ├── services/                # API calls, session management and refresh
 │   └── utils/                   # Helper (session, response, logger)
 └── session.json                 # Saved session (auto-generated, gitignored)
 ```
@@ -126,7 +136,8 @@ Pastikan Xvfb terinstall di Linux tanpa GUI (`sudo apt install -y xvfb`).
 - **JWT Validation**: Mengecek expiry token sebelum dipakai untuk menghindari request sia-sia.
 - **Mutex Re-login**: Jika banyak request gagal 401 bersamaan, sistem hanya akan melakukan 1x proses login ulang.
 - **Production Mode**: Swagger UI otomatis dimatikan jika `NODE_ENV=production`.
-- **Admin Key Protection**: Endpoint `POST /health/session` dilindungi `ADMIN_KEY` (opsional).
+- **Akses privat**: Kirim header `X-Admin-Key` dari backend untuk mengganti sesi, membaca profil, saldo, atau riwayat transaksi. Jangan kirim kunci ke frontend. Tanpa `ADMIN_KEY`, endpoint privat mengembalikan `403`; kunci salah atau tidak dikirim menghasilkan `401`. Pembuatan QRIS dan cek status tetap publik.
+- **Reverse proxy**: Compose hanya membuka port di `127.0.0.1`. Untuk akses eksternal, gunakan reverse proxy HTTPS. Isi `TRUSTED_PROXY` dengan IP proxy tepercaya hanya jika proxy tersebut menimpa header `X-Forwarded-For`.
 - **Structured Logging**: JSON output di production, colorized di development (Winston).
 
 ---
@@ -150,7 +161,7 @@ Kontribusi terbuka untuk siapa saja. Ikuti langkah berikut:
 - Gunakan pattern yang sudah ada (MVC: routes → controllers → services)
 - Response API wajib pakai `success()` / `error()` dari `src/utils/response.js`
 - Jangan tambah dependency baru kalau bisa diselesaikan dengan yang sudah ada
-- Test perubahan sebelum push: `npm run dev` lalu cek endpoint yang relevan
+- Jalankan `npm test` sebelum push. Jalankan `npm run test:docker` untuk menguji startup container tanpa kredensial Saweria.
 
 ### Swagger / OpenAPI
 

@@ -4,8 +4,8 @@ info:
   description: Unofficial API wrapper for Saweria QRIS payments and transaction monitoring. Not affiliated with Saweria.
   version: 1.0.23
 servers:
-  - url: http://localhost:3000
-    description: Local server
+  - url: /
+    description: Current server
 paths:
   /:
     get:
@@ -35,16 +35,11 @@ paths:
   /health/session:
     post:
       summary: Manually set the Saweria auth session (bypasses browser login)
-      description: If ADMIN_KEY env var is set, requires it via X-Admin-Key header or adminKey body field.
+      description: Disabled without ADMIN_KEY. Supply the admin key in the header or the legacy adminKey body field.
+      security:
+        - AdminKey: []
       tags:
         - Health
-      parameters:
-        - in: header
-          name: X-Admin-Key
-          required: false
-          schema:
-            type: string
-          description: Required only if ADMIN_KEY env var is configured
       requestBody:
         required: true
         content:
@@ -66,8 +61,11 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Admin access disabled
   /api/users:
     get:
+      security: [{ AdminKey: [] }]
       summary: Get user profile information
       tags:
         - Users
@@ -80,6 +78,7 @@ paths:
                 $ref: "#/components/schemas/UserResponse"
   /api/payments/balance:
     get:
+      security: [{ AdminKey: [] }]
       summary: Get current balance
       tags:
         - Balance
@@ -92,6 +91,7 @@ paths:
                 $ref: "#/components/schemas/BalanceResponse"
   /api/payments/balance/available:
     get:
+      security: [{ AdminKey: [] }]
       summary: Get available balance (ready to cashout)
       tags:
         - Balance
@@ -104,6 +104,7 @@ paths:
                 $ref: "#/components/schemas/AvailableBalanceResponse"
   /api/payments/transactions:
     get:
+      security: [{ AdminKey: [] }]
       summary: List recent transactions
       tags:
         - Transactions
@@ -186,6 +187,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 components:
+  securitySchemes:
+    AdminKey:
+      type: apiKey
+      in: header
+      name: X-Admin-Key
+      description: Private endpoints return 403 when ADMIN_KEY is unset and 401 for an invalid or missing key.
   schemas:
     RootResponse:
       type: object
@@ -239,6 +246,10 @@ components:
               properties:
                 authenticated:
                   type: boolean
+                browserLoginError:
+                  type: string
+                  nullable: true
+                  description: CHROMIUM_SANDBOX_UNAVAILABLE if browser login is blocked until restart. A manual session can still be used.
                 tokenValid:
                   type: boolean
                 tokenExpiresIn:
@@ -263,7 +274,7 @@ components:
           type: string
         adminKey:
           type: string
-          description: Alternative to X-Admin-Key header, required only if ADMIN_KEY env var is set
+          description: Alternative to the X-Admin-Key header for session updates
     BalanceResponse:
       type: object
       properties:

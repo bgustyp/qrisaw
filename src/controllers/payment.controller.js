@@ -110,6 +110,9 @@ const createQris = async (req, res) => {
 
 const status = async (req, res) => {
   try {
+    if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(req.params.id)) {
+      return error(res, { statusCode: 400, message: "Invalid payment ID" });
+    }
     const data = await service.checkPaymentStatus(req.params.id);
     success(res, "Payment status retrieved", {
       payment_id: data.id,

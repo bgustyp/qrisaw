@@ -3,6 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
+const path = require("node:path");
 const paymentRoutes = require("./src/routes/payment.routes");
 const rateLimit = require("express-rate-limit");
 const requestLogger = require("./src/middlewares/requestLogger.middleware");
@@ -15,23 +16,21 @@ const HOST = process.env.HOST || "0.0.0.0";
 app.use(helmet());
 
 // Trust proxy for rate limiting behind reverse proxy (nginx, cloudflare, etc)
-app.set("trust proxy", 1);
+app.set("trust proxy", process.env.TRUSTED_PROXY || false);
 
 // Swagger UI (Only in Development)
 if (process.env.NODE_ENV !== "production") {
   const swaggerUi = require("swagger-ui-express");
   const YAML = require("yamljs");
-  const swaggerDocument = YAML.load("./docs/openapi.yaml");
+  const swaggerDocument = YAML.load(path.join(__dirname, "docs/openapi.yaml"));
   
   // Inject dynamic server URL based on environment
-  const protocol = process.env.SWAGGER_PROTOCOL || "http";
-  const host = process.env.SWAGGER_HOST || process.env.HOST || "localhost";
-  const port = process.env.PORT || 3000;
-  const serverUrl = host.includes(":") ? `${protocol}://${host}` : `${protocol}://${host}:${port}`;
-  
-  swaggerDocument.servers = [
-    { url: serverUrl, description: "Current server" },
-  ];
+  const host = process.env.SWAGGER_HOST;
+  if (host) {
+    const protocol = process.env.SWAGGER_PROTOCOL || "http";
+    const serverUrl = host.includes(":") ? `${protocol}://${host}` : `${protocol}://${host}:${PORT}`;
+    swaggerDocument.servers = [{ url: serverUrl, description: "Configured server" }];
+  }
   
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
   logger.info("Swagger UI enabled on /api-docs");
