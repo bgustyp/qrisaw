@@ -50,3 +50,33 @@ test("private routes fail closed; authorized balance and public status still wor
   assert.equal((await fetch(`${url}/api/payments/bad-id/status`)).status, 400);
   assert.equal((await fetch(`${url}/api/payments/00000000-0000-4000-8000-000000000000/status`)).status, 200);
 });
+
+test("QRIS accepts Saweria and legacy payer formats and returns only payment fields", async (t) => {
+  const customer_info = { first_name: "Fixture", email: "payer@example.test", phone: "" };
+  const payload = { agree: true, notUnderage: true, payment_type: "qris", currency: "IDR", vote: "",
+    amount: 5000, message: "Test", customer_info };
+  t.mock.method(auth, "requireUserId", () => "recipient");
+  const upstream = t.mock.method(client, "post", async (path, body) => {
+    assert.equal(path, "/donations/snap/recipient");
+    assert.deepEqual(body, payload);
+    return { data: { data: { id: "payment", amount: 5000, qr_string: "fixture-qr",
+      status: "PENDING", donator: customer_info, etc: { amount_to_display: 5000 } } } };
+  });
+  const app = express();
+  app.use(express.json(), payments);
+  const server = app.listen(0, "127.0.0.1");
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  await once(server, "listening");
+  const post = body => fetch(`http://127.0.0.1:${server.address().port}/qris`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  assert.equal((await post({ ...payload, agree: false })).status, 400);
+  assert.equal((await post({ ...payload, customer_info: { email: customer_info.email } })).status, 400);
+  for (const body of [payload, { amount: 5000, message: "Test", customer: { name: "Fixture", email: customer_info.email } }]) {
+    const res = await post(body);
+    assert.equal(res.status, 201);
+    assert.deepEqual((await res.json()).data, { payment_id: "payment", amount: 5000,
+      total_amount: 5000, qr_string: "fixture-qr", status: "PENDING" });
+  }
+  assert.equal(upstream.mock.callCount(), 2);
+});

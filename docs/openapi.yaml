@@ -305,7 +305,9 @@ components:
       type: object
       required:
         - amount
-        - customer
+      anyOf:
+        - required: [customer_info]
+        - required: [customer]
       properties:
         amount:
           type: integer
@@ -313,8 +315,20 @@ components:
         message:
           type: string
           example: "Support server"
+        customer_info:
+          type: object
+          required: [first_name, email]
+          properties:
+            first_name:
+              type: string
+            email:
+              type: string
+              format: email
+            phone:
+              type: string
         customer:
           type: object
+          description: Legacy alternative to customer_info.
           required:
             - name
             - email
