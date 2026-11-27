@@ -3,7 +3,7 @@ const path = require("path");
 const writeFileAtomic = require("write-file-atomic");
 const logger = require("./logger");
 
-const SESSION_FILE = path.join(__dirname, "../../session.json");
+const SESSION_FILE = process.env.SESSION_FILE || path.join(__dirname, "../../session.json");
 
 /**
  * Decode JWT payload without external library.

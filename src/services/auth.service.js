@@ -1,10 +1,11 @@
-const { browserLogin } = require("./captcha.service");
+const { browserLogin } = require("../browser/login");
 const logger = require("../utils/logger");
 const sessionUtils = require("../utils/session");
 
 let authToken = null;
 let userId = null;
-let isLoggingIn = false;
+let pendingLogin = null;
+let sandboxError = null;
 let refreshTimer = null;
 
 const REFRESH_MARGIN_MS = 10 * 60 * 1000; // re-login 10 minutes before expiry
@@ -16,6 +17,7 @@ const runProactiveRefresh = async () => {
     // On success, login() persists the session and re-arms scheduleRefresh.
     await login();
   } catch (err) {
+    if (sandboxError) return;
     logger.error("Proactive token refresh failed, retrying soon", {
       error: err.message,
     });
@@ -27,6 +29,7 @@ const runProactiveRefresh = async () => {
 
 const scheduleRefresh = (token) => {
   if (refreshTimer) clearTimeout(refreshTimer);
+  if (sandboxError || !process.env.SAWERIA_EMAIL || !process.env.SAWERIA_PASSWORD) return;
   const remaining = sessionUtils.getTokenTimeRemaining(token);
   if (!remaining || remaining <= 0) return;
   const delay = Math.max(remaining - REFRESH_MARGIN_MS, 0);
@@ -47,28 +50,12 @@ const init = async () => {
   return false;
 };
 
-const login = async () => {
+const login = () => {
   // Prevent concurrent login attempts
-  if (isLoggingIn) {
-    logger.info("Login already in progress, waiting...");
-    while (isLoggingIn) {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-    if (authToken && userId) {
-      return { authToken, userId };
-    }
-    throw new Error("Login was in progress but failed. Retry explicitly.");
-  }
-
-  try {
-    isLoggingIn = true;
-    logger.info("Starting login process...");
-
-    sessionUtils.clearSession();
-    authToken = null;
-    userId = null;
-
-    const result = await browserLogin();
+  if (sandboxError) return Promise.reject(sandboxError);
+  if (pendingLogin) return pendingLogin;
+  logger.info("Starting login process...");
+  pendingLogin = browserLogin().then((result) => {
     authToken = result.authToken;
     userId = result.userId;
 
@@ -76,19 +63,26 @@ const login = async () => {
     scheduleRefresh(authToken);
 
     return { authToken, userId };
-  } catch (error) {
+  }).catch((error) => {
+    if (error.code === "CHROMIUM_SANDBOX_UNAVAILABLE") sandboxError = error;
     logger.error("Login failed", { message: error.message, stack: error.stack });
     throw error;
-  } finally {
-    isLoggingIn = false;
-  }
+  }).finally(() => {
+    pendingLogin = null;
+  });
+  return pendingLogin;
 };
 
 const getToken = () => authToken;
 const getUserId = () => userId;
+const requireUserId = () => {
+  if (userId) return userId;
+  throw sandboxError || Object.assign(new Error("Saweria session unavailable"), { statusCode: 503 });
+};
 
 const getAuthStatus = () => ({
   isAuthenticated: Boolean(authToken && userId),
+  browserLoginError: sandboxError?.code ?? null,
   tokenValid: authToken ? sessionUtils.isTokenValid(authToken) : false,
   tokenExpiresIn: authToken ? sessionUtils.getTokenTimeRemaining(authToken) : null,
 });
@@ -106,6 +100,7 @@ module.exports = {
   login,
   getToken,
   getUserId,
+  requireUserId,
   getAuthStatus,
   setSession,
 };
