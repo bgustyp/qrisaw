@@ -69,14 +69,15 @@ Atau build manual:
 
 ```bash
 docker build -t qrisaw .
-docker run -d -p 127.0.0.1:3000:3000 --env-file .env -e NODE_ENV=production -e PORT=3000 -e HOST=0.0.0.0 qrisaw
+docker run -d -p 127.0.0.1:3000:3000 --env-file .env -e NODE_ENV=production -e PORT=3000 -e HOST=0.0.0.0 \
+  --security-opt seccomp=./docker/seccomp-chromium.json qrisaw
 ```
 
 Image menyertakan Chromium dari Debian dan berjalan sebagai pengguna `node`, bukan root.
 Sesi container disimpan di `/home/node/session.json`. Jika sebelumnya memakai mount `/app/session.json`, pindahkan sesi saat migrasi dan pastikan UID 1000 bisa menulis direktori sesi.
 
-Auto-login memerlukan sandbox Chromium yang diizinkan kernel dan runtime container. Uji tanpa kredensial: `docker run --rm --network none qrisaw chromium --headless --disable-background-networking --dump-dom about:blank`.
-Jika gagal karena kebijakan namespace, gunakan sesi manual melalui `POST /health/session` dan kosongkan kredensial auto-login. Jangan gunakan `--no-sandbox` atau container privileged.
+Auto-login memerlukan sandbox Chromium di dalam container. Profil seccomp default Docker memblokir pembuatan namespace yang dibutuhkan sandbox, jadi repo ini menyertakan `docker/seccomp-chromium.json` — profil default Docker ditambah izin `clone`/`clone3`/`unshare`/`setns`. Compose memasangnya lewat `security_opt`; `docker run` manual wajib menyertakan `--security-opt seccomp=...` seperti di atas. Container tetap non-root tanpa `CAP_SYS_ADMIN`; jangan gunakan `--no-sandbox` atau container privileged.
+Uji tanpa kredensial: `docker run --rm --network none --security-opt seccomp=./docker/seccomp-chromium.json --entrypoint chromium qrisaw --headless --disable-background-networking --dump-dom about:blank` — harus mengeluarkan HTML. Jika host membatasi user namespace lewat AppArmor (Ubuntu 23.10+, cek `sysctl kernel.apparmor_restrict_unprivileged_userns`), pembuatan namespace masih bisa ditolak; dalam kasus itu gunakan sesi manual melalui `POST /health/session` dan kosongkan kredensial auto-login.
 Jika Chromium melaporkan sandbox ditolak, `/health` menampilkan `data.auth.browserLoginError: "CHROMIUM_SANDBOX_UNAVAILABLE"`. Proses menghentikan percobaan browser sampai restart. Sesi manual tetap dapat digunakan. Tanpa sesi, endpoint yang membutuhkan akun mengembalikan `503`; `401` untuk kunci admin salah tetap berlaku.
 
 ### 5. Single Binary (via Bun)
