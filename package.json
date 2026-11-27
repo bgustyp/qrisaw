@@ -13,7 +13,7 @@
     "start": "node app.js",
     "start:bun": "bun app.js",
     "dev": "node --watch app.js",
-    "login": "bash src/login.sh",
+    "login": "node src/login.js",
     "build": "bun build --compile app.js --outfile qrisaw"
   },
   "bin": {
