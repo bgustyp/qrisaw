@@ -30,3 +30,7 @@ rtk proxy <cmd>       # Run raw (no filtering, for debugging)
 ## Why
 
 RTK filters and compresses command output before it reaches the LLM context, cutting up to 90% of the bash output on common operations. Always use `rtk <cmd>` instead of raw commands.
+
+## Git Commits
+
+Never add co-author lines (`Co-Authored-By`), AI attribution, or any generated-by trailer to commit messages. Commits use only the user's own identity and a plain message.
