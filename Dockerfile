@@ -3,6 +3,7 @@ FROM node:22-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
     chromium-sandbox \
+    ca-certificates \
     xvfb \
     xauth \
     fonts-liberation \
